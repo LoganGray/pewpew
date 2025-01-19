@@ -1,81 +1,153 @@
-// setup default min/max timer range for random draw
-attack_min = 100;
-attack_max = 2000;
+/*****************************
+ * GLOBAL CONFIGURATION
+ *****************************/
 
-// add/change the attack types here
-attack_type = ["any port scan in a storm", "ssh brutish force", "Thought Leader Tweet",
-  "SYN FLOOD BA-BY", "Spotty", "Heartbleed Hotel", "Po_ODLE", "Sharknado",
-  "CORGI Attack", "Ping of DOOM", "Conficker", "Goldfinger", "SANDPAPER",
-  "SNAILshock", "Spaghetti RAT", "Driduplex"];
+// Attack timing configuration (in milliseconds)
+const attack_min = 100;  // Minimum time between attacks
+const attack_max = 2000; // Maximum time between attacks
 
-// gotta add types here if you add more sounds (or delete them)
+// List of possible attack types that will be randomly selected
+// These are displayed in the attack log and attack bubbles
+const attack_types = [
+  "any port scan in a storm", 
+  "ssh brutish force", 
+  "Thought Leader Tweet",
+  "SYN FLOOD BA-BY", 
+  "Spotty", 
+  "Heartbleed Hotel", 
+  "Po_ODLE", 
+  "Sharknado",
+  "CORGI Attack", 
+  "Ping of DOOM", 
+  "Conficker", 
+  "Goldfinger", 
+  "SANDPAPER",
+  "SNAILshock", 
+  "Spaghetti RAT", 
+  "Driduplex"
+];
+
+// Available sound effects for attacks
+// Each corresponds to an audio element in index.html
+// Can be triggered by URL parameters or randomly with allfx
+const audio_types = [
+  "starwars", 
+  "tng", 
+  "b5", 
+  "wargames", 
+  "pew", 
+  "galaga", 
+  "asteroids", 
+  "china", 
+  "timallen"
+];
+
+// Available sound effects for attacks
+// Each corresponds to an audio element in index.html
+// Can be triggered by URL parameters or randomly with allfx
 audio_type = ["starwars", "tng", "b5", "wargames", "pew", "galaga", "asteroids", "china", "timallen"];
 
-// need this to more easily grab URI query parameters
+/*****************************
+ * URL PARAMETER HANDLING
+ *****************************/
+
+/**
+ * jQuery extension to parse URL parameters
+ * Allows easy access to configuration options passed in URL
+ * Example: ?norse_mode=1&bad_day=1&org_name=MyCompany
+ */
 $.extend({
+  /**
+   * Returns an object containing all URL parameters
+   * @returns {Object} Key-value pairs of URL parameters
+   */
   getUrlVars: function() {
-    var vars = [], hash;
-    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
-    for(var i = 0; i < hashes.length; i++) {
-      hash = hashes[i].split('=');
+    const vars = [];
+    const hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+    
+    for(let i = 0; i < hashes.length; i++) {
+      const hash = hashes[i].split('=');
       vars.push(hash[0]);
       vars[hash[0]] = hash[1];
     }
     return vars;
   },
+  
+  /**
+   * Returns the value of a specific URL parameter
+   * @param {string} name - The parameter name to retrieve
+   * @returns {string|undefined} The parameter value or undefined if not found
+   */
   getUrlVar: function(name) {
-    return $.getUrlVars()[name];
+    return this.getUrlVars()[name];
   }
 });
 
-// here is where we deal with parameters
-// try to grab them, see if they exist, make changes to defaults if they do
+/*****************************
+ * URL PARAMETER PROCESSING
+ *****************************/
 
-var norse_mode = $.getUrlVar('norse_mode');
-var bad_day = $.getUrlVar('bad_day');
-var org_name = $.getUrlVar('org_name');
-var chatt_mode = $.getUrlVar('chatt_mode');
-var china_mode = $.getUrlVar('china_mode');
-var dprk_mode = $.getUrlVar('dprk_mode');
-var employee_mode = $.getUrlVar('employee_mode');
-var employee_fname = $.getUrlVar('employee_fname');
-var employee_lname = $.getUrlVar('employee_lname');
-var origin = $.getUrlVar('origin');
-var random_mode = $.getUrlVar('random_mode');
-var tng = $.getUrlVar('tng');
-var wargames = $.getUrlVar('wargames');
-var b5 = $.getUrlVar('b5');
-var nofx = $.getUrlVar('nofx');
-var pew = $.getUrlVar('pew');
-var allfx = $.getUrlVar('allfx')
-var galaga = $.getUrlVar('galaga')
-var asteroids = $.getUrlVar('asteroids')
-var china = $.getUrlVar('china')
-var timallen = $.getUrlVar('timallen')
-var drill_mode = $.getUrlVar("drill_mode")
-var in_lat = $.getUrlVar("lat")
-var in_lon = $.getUrlVar("lon")
-var destination = $.getUrlVar("destination")
-var greenattacks = $.getUrlVar("greenattacks")
-var redattacks = $.getUrlVar("redattacks")
+// Extract all URL parameters
+const urlParams = {
+  norse_mode: $.getUrlVar('norse_mode'),
+  bad_day: $.getUrlVar('bad_day'),
+  org_name: $.getUrlVar('org_name'),
+  chatt_mode: $.getUrlVar('chatt_mode'),
+  china_mode: $.getUrlVar('china_mode'),
+  dprk_mode: $.getUrlVar('dprk_mode'),
+  employee_mode: $.getUrlVar('employee_mode'),
+  employee_fname: $.getUrlVar('employee_fname'),
+  employee_lname: $.getUrlVar('employee_lname'),
+  origin: $.getUrlVar('origin'),
+  random_mode: $.getUrlVar('random_mode'),
+  tng: $.getUrlVar('tng'),
+  wargames: $.getUrlVar('wargames'),
+  b5: $.getUrlVar('b5'),
+  nofx: $.getUrlVar('nofx'),
+  pew: $.getUrlVar('pew'),
+  allfx: $.getUrlVar('allfx'),
+  galaga: $.getUrlVar('galaga'),
+  asteroids: $.getUrlVar('asteroids'),
+  china: $.getUrlVar('china'),
+  timallen: $.getUrlVar('timallen'),
+  drill_mode: $.getUrlVar('drill_mode'),
+  in_lat: $.getUrlVar('lat'),
+  in_lon: $.getUrlVar('lon'),
+  destination: $.getUrlVar('destination'),
+  greenattacks: $.getUrlVar('greenattacks'),
+  redattacks: $.getUrlVar('redattacks')
+};
 
-snd_id = "starwars";
-if (typeof tng !== 'undefined') { snd_id = "tng"; }
-if (typeof b5 !== 'undefined') { snd_id = "b5"; }
-if (typeof wargames !== 'undefined') { snd_id = "wargames"; }
-if (typeof pew !== 'undefined') { snd_id = "pew"; }
-if (typeof galaga !== 'undefined') { snd_id = "galaga"; }
-if (typeof asteroids !== 'undefined') { snd_id = "asteroids"; }
-if (typeof china !== 'undefined') { snd_id = "china"; }
-if (typeof timallen !== 'undefined') { snd_id = "timallen"; }
+// Set default sound effect
+let snd_id = "starwars";
 
-if (typeof bad_day !== 'undefined') {
-  attack_min=200;
-  attack_max=200;
+// Override sound effect based on URL parameters
+const soundMappings = {
+  tng: "tng",
+  b5: "b5",
+  wargames: "wargames",
+  pew: "pew",
+  galaga: "galaga",
+  asteroids: "asteroids",
+  china: "china",
+  timallen: "timallen"
+};
+
+for (const [param, sound] of Object.entries(soundMappings)) {
+  if (typeof urlParams[param] !== 'undefined') {
+    snd_id = sound;
+    break;
+  }
 }
 
-if (typeof org_name !== 'undefined') { 
-  $("#titlediv").text(decodeURI(org_name) + " IPew Attack Map").html() 
+// Handle special modes
+if (typeof urlParams.bad_day !== 'undefined') {
+  attack_min = 200;
+  attack_max = 200;
+}
+
+if (typeof urlParams.org_name !== 'undefined') {
+  $("#titlediv").text(decodeURI(urlParams.org_name) + " IPew Attack Map").html();
 }
 
 // we maintain a fixed queue of "attacks" via this class
@@ -140,8 +212,82 @@ var getRandomCountry = function(countries, weight) {
 var countries = [9,22,29,49,56,58,78,82,102,117,139,176,186];
 var weight = [0.000,0.001,0.004,0.008,0.009,0.037,0.181,0.002,0.000,0.415,0.006,0.075,0.088];
 
-// the fun begins!
-//
+/*****************************
+ * DATA MANAGER
+ *****************************/
+
+class DataManager {
+  /**
+   * Record a new attack in the database
+   * @param {Object} attackData - The attack data to record
+   */
+  static async recordAttack(attackData) {
+    try {
+      const response = await fetch('/api/attacks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(attackData)
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to record attack:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error recording attack:', error);
+    }
+  }
+
+  /**
+   * Get attack statistics from the API
+   * @returns {Promise<Object>} Attack statistics
+   */
+  static async getStats() {
+    try {
+      const response = await fetch('/api/stats');
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting stats:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get recent attacks from the API
+   * @param {number} limit - Maximum number of attacks to retrieve
+   * @returns {Promise<Array>} Array of recent attacks
+   */
+  static async getRecentAttacks(limit = 100) {
+    try {
+      const response = await fetch(`/api/attacks?limit=${limit}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting recent attacks:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get geo location for an IP address
+   * @param {string} ip - IP address to lookup
+   * @returns {Promise<Object>} Geo location data
+   */
+  static async getGeoLocation(ip) {
+    try {
+      const response = await fetch(`/api/ip2geo?ip=${ip}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting geo location:', error);
+      return null;
+    }
+  }
+}
+
+/*****************************
+ * MAIN APPLICATION
+ *****************************/
+
 // pretty simple setup ->
 // * make base Datamap
 // * setup timers to add random events to a queue
@@ -172,23 +318,22 @@ var map = new Datamap({
   },
 });
 
-// we read in a modified file of all country centers
+// Load geographic data files
 var centers = [];
-d3.tsv("country_centroids_primary.csv", function(data) { centers = data; });
-d3.csv("samplatlong.csv", function(data) { slatlong = data; });
-d3.csv("cnlatlong.csv", function(data) { cnlatlong = data; });
+d3.tsv("country_centroids_primary.csv", function(data) { centers = data; });  // Country center points
+d3.csv("samplatlong.csv", function(data) { slatlong = data; });              // Sample lat/long pairs
+d3.csv("cnlatlong.csv", function(data) { cnlatlong = data; });               // China-specific coordinates
 
-// setup structures for the "hits" (arcs)
-// and circle booms
-var hits = FixedQueue(7, []);
-var boom = FixedQueue(7, []);
+// Initialize fixed-size queues for visual effects
+var hits = FixedQueue(7, []);  // Stores the last 7 attack arcs (lines between points)
+var boom = FixedQueue(7, []);  // Stores the last 7 explosion effects (circles at target)
 
-// we need random numbers and also a way to build random ip addresses
-function getRandomInt(min, max) {return Math.floor(Math.random() * (max - min + 1)) + min;}
-function getOctet() {return Math.round(Math.random()*255);}
-function randomIP() { return(getOctet() + '.' + getOctet() + '.' + getOctet() + '.' + getOctet()); }
-function getStroke() {return Math.round(Math.random()*100);}
-function getDestination() {return Math.round(Math.random()*100);}
+// Utility functions for generating random values
+function getRandomInt(min, max) {return Math.floor(Math.random() * (max - min + 1)) + min;}  // Random integer in range
+function getOctet() {return Math.round(Math.random()*255);}                                   // Random IP octet (0-255)
+function randomIP() { return(getOctet() + '.' + getOctet() + '.' + getOctet() + '.' + getOctet()); }  // Random IP address
+function getStroke() {return Math.round(Math.random()*100);}                                  // Random number for attack color
+function getDestination() {return Math.round(Math.random()*100);}                            // Random number for destination selection
 
 // doing this a bit fancy for a hack, but it makes it
 // easier to group code functions together and have variables
@@ -348,10 +493,25 @@ var attacks = {
         }
       });
 
+      // Record attack using DataManager
+      const sourceIP = randomIP();
+      const destIP = randomIP();
+      DataManager.recordAttack({
+        source_ip: sourceIP,
+        source_country: srccountry,
+        source_lat: srclat,
+        source_long: srclong,
+        dest_ip: destIP,
+        dest_country: attackdiv_slatlong,
+        dest_lat: dstlat,
+        dest_long: dstlong,
+        attack_type: which_attack
+      });
+
       // update the scrolling attack div
-      $('#attackdiv').append(srccountry + " (" + randomIP() + ") " +
+      $('#attackdiv').append(srccountry + " (" + sourceIP + ") " +
         " <span style='color:red'>attacks</span> " +
-        attackdiv_slatlong + " (" + randomIP() + ") " +
+        attackdiv_slatlong + " (" + destIP + ") " +
         " <span style='color:steelblue'>(" + which_attack + ")</span> " +
         "<br/>");
       $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
