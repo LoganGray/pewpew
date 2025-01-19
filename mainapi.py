@@ -1,3 +1,10 @@
+import sys
+import os
+# Add user's local site-packages to Python path
+user_site_packages = os.path.expanduser('~/.local/lib/python3.10/site-packages')
+if user_site_packages not in sys.path:
+    sys.path.append(user_site_packages)
+
 from flask import Flask, jsonify, request
 import geoip2.database
 import os
@@ -12,6 +19,9 @@ db = SQLAlchemy(app)
 reader = geoip2.database.Reader('GeoLite2-City.mmdb')
 
 
+# Configuration for attack home IP  - google hehehehe
+IP_HOME = "8.8.8.8"  # Default home IP, can be changed later
+
 class Attack(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -24,6 +34,13 @@ class Attack(db.Model):
     dest_lat = db.Column(db.Float)
     dest_long = db.Column(db.Float)
     attack_type = db.Column(db.String(50))
+
+class IPAttack(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    source_ip = db.Column(db.String(15), nullable=False)
+    dest_ip = db.Column(db.String(15), nullable=False, default=IP_HOME)
+    attack_type = db.Column(db.String(50), default="Manual IP Attack")
 
     def to_dict(self):
         return {
@@ -78,6 +95,46 @@ def get_stats():
     }
     return jsonify(stats)
 
+@app.route('/api/attackfromip/<ip>', methods=['POST'])
+def attack_from_ip(ip):
+    """Record an attack from a specific IP address"""
+    try:
+        # Get geo location for the source IP
+        geo = reader.city(ip)
+        
+        attack = IPAttack(
+            source_ip=ip,
+            dest_ip=IP_HOME,
+            attack_type=f"Manual attack from {ip}"
+        )
+        
+        db.session.add(attack)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Attack from {ip} recorded',
+            'attack': {
+                'id': attack.id,
+                'timestamp': attack.timestamp.isoformat(),
+                'source_ip': attack.source_ip,
+                'dest_ip': attack.dest_ip,
+                'attack_type': attack.attack_type,
+                'geo': {
+                    'latitude': float(geo.location.latitude),
+                    'longitude': float(geo.location.longitude),
+                    'city': geo.city.name,
+                    'country': geo.country.name
+                }
+            }
+        }), 201
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+
 @app.route('/api/ip2geo', methods=['GET'])
 def ip_to_geo():
     ip_address = request.args.get('ip')
@@ -97,9 +154,26 @@ def ip_to_geo():
         return jsonify({'error': str(e)}), 400
 
 
+import logging
+from pathlib import Path
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Initialize the database
 with app.app_context():
-    db.create_all()
+    db_file = Path('pewpew.db')
+    if not db_file.exists():
+        logger.info("Database not found. Creating new database...")
+        db.create_all()
+        # Add default home IP to configuration
+        logger.info(f"Database created successfully with default home IP: {IP_HOME}")
+    else:
+        logger.info("Existing database found")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
