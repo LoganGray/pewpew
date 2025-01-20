@@ -5,13 +5,21 @@ user_site_packages = os.path.expanduser('~/.local/lib/python3.10/site-packages')
 if user_site_packages not in sys.path:
     sys.path.append(user_site_packages)
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
+from flask_cors import CORS
+from flask_socketio import SocketIO
 import geoip2.database
 import os
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*",
+                   async_mode='eventlet',
+                   logger=True,
+                   engineio_logger=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pewpew.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -19,8 +27,9 @@ db = SQLAlchemy(app)
 reader = geoip2.database.Reader('GeoLite2-City.mmdb')
 
 
-# Configuration for attack home IP  - google hehehehe
+# Configuration for attack home IP
 IP_HOME = "8.8.8.8"  # Default home IP, can be changed later
+demo_mode = False  # Global flag for demo mode
 
 class Attack(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -95,6 +104,11 @@ def get_stats():
     }
     return jsonify(stats)
 
+@app.route('/api/demo/status', methods=['GET'])
+def demo_status():
+    """Check if demo mode is enabled"""
+    return jsonify({'demo_mode': demo_mode}), 200
+
 @app.route('/api/attackfromip/<ip>', methods=['POST'])
 def attack_from_ip(ip):
     """Record an attack from a specific IP address"""
@@ -111,22 +125,26 @@ def attack_from_ip(ip):
         db.session.add(attack)
         db.session.commit()
         
+        # Broadcast attack to all connected clients
+        attack_data = {
+            'id': attack.id,
+            'timestamp': attack.timestamp.isoformat(),
+            'source_ip': attack.source_ip,
+            'dest_ip': attack.dest_ip,
+            'attack_type': attack.attack_type,
+            'geo': {
+                'latitude': float(geo.location.latitude),
+                'longitude': float(geo.location.longitude),
+                'city': geo.city.name,
+                'country': geo.country.name
+            }
+        }
+        socketio.emit('new_attack', attack_data)
+        
         return jsonify({
             'status': 'success',
             'message': f'Attack from {ip} recorded',
-            'attack': {
-                'id': attack.id,
-                'timestamp': attack.timestamp.isoformat(),
-                'source_ip': attack.source_ip,
-                'dest_ip': attack.dest_ip,
-                'attack_type': attack.attack_type,
-                'geo': {
-                    'latitude': float(geo.location.latitude),
-                    'longitude': float(geo.location.longitude),
-                    'city': geo.city.name,
-                    'country': geo.country.name
-                }
-            }
+            'attack': attack_data
         }), 201
         
     except Exception as e:
@@ -134,6 +152,20 @@ def attack_from_ip(ip):
             'status': 'error',
             'message': str(e)
         }), 400
+
+@app.route('/api/demo/<state>', methods=['POST'])
+def toggle_demo(state):
+    """Toggle demo mode on/off"""
+    global demo_mode
+    
+    if state == 'on':
+        demo_mode = True
+        return jsonify({'status': 'success', 'message': 'Demo mode enabled'}), 200
+    elif state == 'off':
+        demo_mode = False
+        return jsonify({'status': 'success', 'message': 'Demo mode disabled'}), 200
+    else:
+        return jsonify({'status': 'error', 'message': 'Invalid state. Use "on" or "off"'}), 400
 
 @app.route('/api/ip2geo', methods=['GET'])
 def ip_to_geo():
@@ -176,4 +208,11 @@ with app.app_context():
         logger.info("Existing database found")
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Initialize WebSocket server
+    socketio.init_app(app)
+    socketio.run(app, 
+                debug=True, 
+                host='0.0.0.0', 
+                port=5000,
+                use_reloader=False,
+                log_output=True)
