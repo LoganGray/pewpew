@@ -291,6 +291,36 @@ const socket = io(API_URL);
 console.log('API_URL:', API_URL);
 // Track last destination to avoid duplicate messages
 let lastDestination = null;
+let lastDemoStatus = null;
+
+// Check demo mode status on page load
+fetch(`${API_URL}/api/demo/status`)
+  .then(response => response.json())
+  .then(data => {
+    if (data.demo_mode) {
+      $('#attackdiv').append(
+        `<span style="color:yellow">DEMO MODE IS ON</span><br/>`
+      );
+      $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
+    }
+    lastDemoStatus = data.demo_mode;
+  })
+  .catch(error => {
+    console.error('Error getting demo status:', error);
+  });
+
+// Handle demo mode changes
+socket.on('demo_mode_change', function(status) {
+  if (lastDemoStatus !== status.demo_mode) {
+    const message = status.demo_mode ? 
+      `<span style="color:yellow">DEMO MODE IS ON</span><br/>` : 
+      `<span style="color:yellow">DEMO MODE IS OFF</span><br/>`;
+    
+    $('#attackdiv').append(message);
+    $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
+    lastDemoStatus = status.demo_mode;
+  }
+});
 
 socket.on('destination_change', function(dest) {
     // Only show message if destination actually changed

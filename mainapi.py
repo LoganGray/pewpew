@@ -20,7 +20,14 @@ socketio = SocketIO(app,
                    async_mode='eventlet',
                    logger=True,
                    engineio_logger=True)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pewpew.db'
+# Configure database path
+import os
+from pathlib import Path
+
+# Create database directory in current working directory
+db_dir = Path('database')
+db_dir.mkdir(exist_ok=True)
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_dir}/pewpew.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 # Initialize the GeoIP2 reader
@@ -29,7 +36,12 @@ reader = geoip2.database.Reader('GeoLite2-City.mmdb')
 
 # Configuration for attack home IP
 IP_HOME = "8.8.8.8"  # Default home IP, can be changed later
-demo_mode = False  # Global flag for demo mode
+def get_config(key, default=None):
+    """Get a configuration value from database"""
+    config = Config.query.filter_by(key=key).first()
+    if config:
+        return config.value == 'True' if default is False else config.value
+    return default
 
 class Attack(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -43,6 +55,12 @@ class Attack(db.Model):
     dest_lat = db.Column(db.Float)
     dest_long = db.Column(db.Float)
     attack_type = db.Column(db.String(50))
+
+class Config(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(255), nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 class DestinationIP(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -119,6 +137,7 @@ def get_stats():
 @app.route('/api/demo/status', methods=['GET'])
 def demo_status():
     """Check if demo mode is enabled"""
+    demo_mode = get_config('demo_mode', False)
     return jsonify({'demo_mode': demo_mode}), 200
 
 @app.route('/api/attackfromip/<ip>', methods=['POST'])
@@ -185,16 +204,24 @@ def attack_from_ip(ip):
 @app.route('/api/demo/<state>', methods=['POST'])
 def toggle_demo(state):
     """Toggle demo mode on/off"""
-    global demo_mode
-    
-    if state == 'on':
-        demo_mode = True
-        return jsonify({'status': 'success', 'message': 'Demo mode enabled'}), 200
-    elif state == 'off':
-        demo_mode = False
-        return jsonify({'status': 'success', 'message': 'Demo mode disabled'}), 200
-    else:
+    if state not in ['on', 'off']:
         return jsonify({'status': 'error', 'message': 'Invalid state. Use "on" or "off"'}), 400
+        
+    # Update or create config entry
+    config = Config.query.filter_by(key='demo_mode').first()
+    if not config:
+        config = Config(key='demo_mode')
+        db.session.add(config)
+    
+    config.value = str(state == 'on')
+    db.session.commit()
+    
+    socketio.emit('demo_mode_change', {'demo_mode': state == 'on'})
+    return jsonify({
+        'status': 'success',
+        'message': f'Demo mode {"enabled" if state == "on" else "disabled"}',
+        'demo_mode': state == 'on'
+    }), 200
 
 def get_current_destination():
     """Get the current destination IP from database"""
@@ -288,14 +315,33 @@ logger = logging.getLogger(__name__)
 
 # Initialize the database
 with app.app_context():
-    db_file = Path('pewpew.db')
-    if not db_file.exists():
-        logger.info("Database not found. Creating new database...")
-        db.create_all()
-        # Add default home IP to configuration
-        logger.info(f"Database created successfully with default home IP: {IP_HOME}")
-    else:
-        logger.info("Existing database found")
+    try:
+        # Create database directory if it doesn't exist
+        os.makedirs('database', exist_ok=True)
+        
+        # Set full path for database file
+        db_path = os.path.join('database', 'pewpew.db')
+        db_file = Path(db_path)
+        
+        if not db_file.exists():
+            logger.info("Database not found. Creating new database...")
+            db.create_all()
+            
+            # Add default home IP to configuration
+            dest = DestinationIP(ip=IP_HOME, is_default=True)
+            db.session.add(dest)
+            db.session.commit()
+            
+            # Set permissions on database file
+            os.chmod(db_path, 0o666)  # Read/write for all
+            
+            logger.info(f"Database created successfully with default home IP: {IP_HOME}")
+        else:
+            logger.info("Existing database found")
+            
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+        raise
 
 if __name__ == '__main__':
     # Initialize WebSocket server

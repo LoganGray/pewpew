@@ -17,5 +17,9 @@ COPY . .
 # Expose the Flask port
 EXPOSE 5000
 
+# Create database directory and set permissions
+RUN mkdir -p /opt/pewpew/database && \
+    chmod 777 /opt/pewpew/database
+
 # Run the application
 CMD ["python", "mainapi.py"]
