@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8000:8080"  # Changed external port to 8000  - everyting always uses 8080!! haha
     depends_on:
       - api
 
