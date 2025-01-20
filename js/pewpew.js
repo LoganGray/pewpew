@@ -289,6 +289,43 @@ class DataManager {
  *****************************/
 const socket = io(API_URL);
 console.log('API_URL:', API_URL);
+// Track last destination to avoid duplicate messages
+let lastDestination = null;
+
+socket.on('destination_change', function(dest) {
+    // Only show message if destination actually changed
+    if (!lastDestination || lastDestination.ip !== dest.ip) {
+        // Get geo location for the new destination IP
+        fetch(`${API_URL}/api/ip2geo?ip=${dest.ip}`)
+            .then(response => response.json())
+            .then(geo => {
+                const location = geo.city ? `${geo.city}, ${geo.country}` : geo.country;
+                const destStatus = dest.is_default ? 
+                    `Using default destination ${dest.ip} (${location})` : 
+                    `Destination set to ${dest.ip} (${location})`;
+                
+                $('#attackdiv').append(
+                    `<span style="color:yellow">${destStatus}</span><br/>`
+                );
+                $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
+                lastDestination = dest;
+            })
+            .catch(error => {
+                console.error('Error getting destination location:', error);
+                // Fallback to IP only if geo lookup fails
+                const destStatus = dest.is_default ? 
+                    `Using default destination ${dest.ip}` : 
+                    `Destination set to ${dest.ip}`;
+                
+                $('#attackdiv').append(
+                    `<span style="color:yellow">${destStatus}</span><br/>`
+                );
+                $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
+                lastDestination = dest;
+            });
+    }
+});
+
 socket.on('new_attack', function(attack) {
     // Convert attack data to visualization format
     const attackData = {
@@ -330,34 +367,14 @@ socket.on('new_attack', function(attack) {
     const originLocation = attack.geo.city ? `${attack.geo.city}, ${attack.geo.country}` : attack.geo.country;
     const destLocation = attack.dest_geo.city ? `${attack.dest_geo.city}, ${attack.dest_geo.country}` : attack.dest_geo.country;
     
-    // Get destination status
-    fetch(`${API_URL}/api/setdestination`)
-      .then(response => response.json())
-      .then(dest => {
-        const destStatus = dest.is_default ? 
-          `(Using default destination ${dest.ip})` : 
-          `(Destination set to ${dest.ip})`;
-        
-        $('#attackdiv').append(
-          originLocation + " (" + attackData.source_ip + ") " +
-          " <span style='color:red'>attacks</span> " +
-          destLocation + " (" + attackData.dest_ip + ") " +
-          " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
-          " <span style='color:yellow'>" + destStatus + "</span>" +
-          "<br/>"
-        );
-      })
-      .catch(error => {
-        console.error('Error getting destination:', error);
-        // Fallback to original display if destination API fails
-        $('#attackdiv').append(
-          originLocation + " (" + attackData.source_ip + ") " +
-          " <span style='color:red'>attacks</span> " +
-          destLocation + " (" + attackData.dest_ip + ") " +
-          " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
-          "<br/>"
-        );
-      });
+    // Display the attack
+    $('#attackdiv').append(
+      originLocation + " (" + attackData.source_ip + ") " +
+      " <span style='color:red'>attacks</span> " +
+      destLocation + " (" + attackData.dest_ip + ") " +
+      " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
+      "<br/>"
+    );
     $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
 });
 

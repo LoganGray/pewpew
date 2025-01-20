@@ -229,6 +229,13 @@ def set_destination(ip):
         db.session.add(dest)
         db.session.commit()
         
+        # Broadcast destination change to all clients
+        socketio.emit('destination_change', {
+            'ip': dest.ip,
+            'is_default': dest.is_default,
+            'timestamp': dest.timestamp.isoformat()
+        })
+        
         return jsonify({
             'status': 'success',
             'message': f'Destination IP set to {ip}',
