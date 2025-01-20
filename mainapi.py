@@ -44,11 +44,23 @@ class Attack(db.Model):
     dest_long = db.Column(db.Float)
     attack_type = db.Column(db.String(50))
 
+class DestinationIP(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(15), nullable=False, default=IP_HOME)
+    is_default = db.Column(db.Boolean, default=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
 class IPAttack(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     source_ip = db.Column(db.String(15), nullable=False)
+    source_country = db.Column(db.String(2))
+    source_lat = db.Column(db.Float)
+    source_long = db.Column(db.Float)
     dest_ip = db.Column(db.String(15), nullable=False, default=IP_HOME)
+    dest_country = db.Column(db.String(2))
+    dest_lat = db.Column(db.Float)
+    dest_long = db.Column(db.Float)
     attack_type = db.Column(db.String(50), default="Manual IP Attack")
 
     def to_dict(self):
@@ -113,12 +125,23 @@ def demo_status():
 def attack_from_ip(ip):
     """Record an attack from a specific IP address"""
     try:
-        # Get geo location for the source IP
-        geo = reader.city(ip)
+        # Get current destination IP
+        dest = get_current_destination()
         
+        # Get geo locations for both source and destination IPs
+        src_geo = reader.city(ip)
+        dest_geo = reader.city(dest.ip)
+        
+        # Handle potential None values from GeoIP lookup
         attack = IPAttack(
             source_ip=ip,
-            dest_ip=IP_HOME,
+            source_country=src_geo.country.iso_code if src_geo.country else None,
+            source_lat=float(src_geo.location.latitude) if src_geo.location and src_geo.location.latitude else None,
+            source_long=float(src_geo.location.longitude) if src_geo.location and src_geo.location.longitude else None,
+            dest_ip=dest.ip,
+            dest_country=dest_geo.country.iso_code if dest_geo.country else None,
+            dest_lat=float(dest_geo.location.latitude) if dest_geo.location and dest_geo.location.latitude else None,
+            dest_long=float(dest_geo.location.longitude) if dest_geo.location and dest_geo.location.longitude else None,
             attack_type=f"Manual attack from {ip}"
         )
         
@@ -133,10 +156,16 @@ def attack_from_ip(ip):
             'dest_ip': attack.dest_ip,
             'attack_type': attack.attack_type,
             'geo': {
-                'latitude': float(geo.location.latitude),
-                'longitude': float(geo.location.longitude),
-                'city': geo.city.name,
-                'country': geo.country.name
+                'latitude': float(src_geo.location.latitude) if src_geo.location and src_geo.location.latitude else None,
+                'longitude': float(src_geo.location.longitude) if src_geo.location and src_geo.location.longitude else None,
+                'city': src_geo.city.name if src_geo.city else None,
+                'country': src_geo.country.name if src_geo.country else None
+            },
+            'dest_geo': {
+                'latitude': float(dest_geo.location.latitude) if dest_geo.location and dest_geo.location.latitude else None,
+                'longitude': float(dest_geo.location.longitude) if dest_geo.location and dest_geo.location.longitude else None,
+                'city': dest_geo.city.name if dest_geo.city else None,
+                'country': dest_geo.country.name if dest_geo.country else None
             }
         }
         socketio.emit('new_attack', attack_data)
@@ -166,6 +195,60 @@ def toggle_demo(state):
         return jsonify({'status': 'success', 'message': 'Demo mode disabled'}), 200
     else:
         return jsonify({'status': 'error', 'message': 'Invalid state. Use "on" or "off"'}), 400
+
+def get_current_destination():
+    """Get the current destination IP from database"""
+    dest = DestinationIP.query.order_by(DestinationIP.timestamp.desc()).first()
+    if not dest:
+        # Initialize with default if none exists
+        dest = DestinationIP(ip=IP_HOME, is_default=True)
+        db.session.add(dest)
+        db.session.commit()
+    return dest
+
+@app.route('/api/setdestination', methods=['GET'])
+def get_destination():
+    """Get current destination IP"""
+    dest = get_current_destination()
+    return jsonify({
+        'ip': dest.ip,
+        'is_default': dest.is_default,
+        'timestamp': dest.timestamp.isoformat()
+    })
+
+@app.route('/api/setdestination/<ip>', methods=['POST'])
+def set_destination(ip):
+    """Set new destination IP"""
+    try:
+        # Validate IP format
+        import ipaddress
+        ipaddress.ip_address(ip)  # Will raise ValueError if invalid
+        
+        # Create new destination record
+        dest = DestinationIP(ip=ip, is_default=False)
+        db.session.add(dest)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Destination IP set to {ip}',
+            'destination': {
+                'ip': dest.ip,
+                'is_default': dest.is_default,
+                'timestamp': dest.timestamp.isoformat()
+            }
+        }), 200
+        
+    except ValueError as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Invalid IP address: {ip}'
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/ip2geo', methods=['GET'])
 def ip_to_geo():

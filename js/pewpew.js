@@ -297,8 +297,8 @@ socket.on('new_attack', function(attack) {
             longitude: attack.geo.longitude
         },
         destination: {
-            latitude: -33.494, // Google DNS location
-            longitude: 143.2104
+            latitude: attack.dest_geo.latitude,
+            longitude: attack.dest_geo.longitude
         },
         attack_type: attack.attack_type,
         source_ip: attack.source_ip,
@@ -326,14 +326,38 @@ socket.on('new_attack', function(attack) {
         }
     });
 
-    // Update attack log
-    $('#attackdiv').append(
-        attackData.origin.country + " (" + attackData.source_ip + ") " +
-        " <span style='color:red'>attacks</span> " +
-        attackData.destination.country + " (" + attackData.dest_ip + ") " +
-        " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
-        "<br/>"
-    );
+    // Update attack log with city and country information
+    const originLocation = attack.geo.city ? `${attack.geo.city}, ${attack.geo.country}` : attack.geo.country;
+    const destLocation = attack.dest_geo.city ? `${attack.dest_geo.city}, ${attack.dest_geo.country}` : attack.dest_geo.country;
+    
+    // Get destination status
+    fetch(`${API_URL}/api/setdestination`)
+      .then(response => response.json())
+      .then(dest => {
+        const destStatus = dest.is_default ? 
+          `(Using default destination ${dest.ip})` : 
+          `(Destination set to ${dest.ip})`;
+        
+        $('#attackdiv').append(
+          originLocation + " (" + attackData.source_ip + ") " +
+          " <span style='color:red'>attacks</span> " +
+          destLocation + " (" + attackData.dest_ip + ") " +
+          " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
+          " <span style='color:yellow'>" + destStatus + "</span>" +
+          "<br/>"
+        );
+      })
+      .catch(error => {
+        console.error('Error getting destination:', error);
+        // Fallback to original display if destination API fails
+        $('#attackdiv').append(
+          originLocation + " (" + attackData.source_ip + ") " +
+          " <span style='color:red'>attacks</span> " +
+          destLocation + " (" + attackData.dest_ip + ") " +
+          " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
+          "<br/>"
+        );
+      });
     $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
 });
 
@@ -619,12 +643,17 @@ var attacks = {
         attack_type: which_attack
       });
 
-      // update the scrolling attack div
-      $('#attackdiv').append(srccountry + " (" + sourceIP + ") " +
+      // update the scrolling attack div with city and country information
+      const originLocation = srccountry; // For random attacks we only have country
+      const destLocation = attackdiv_slatlong; // For random attacks we only have country
+      
+      $('#attackdiv').append(
+        originLocation + " (" + sourceIP + ") " +
         " <span style='color:red'>attacks</span> " +
-        attackdiv_slatlong + " (" + destIP + ") " +
+        destLocation + " (" + destIP + ") " +
         " <span style='color:steelblue'>(" + which_attack + ")</span> " +
-        "<br/>");
+        "<br/>"
+      );
       $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
     }
     // pick a new random time and start the timer again!
