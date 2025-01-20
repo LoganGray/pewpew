@@ -24,10 +24,10 @@ socketio = SocketIO(app,
 import os
 from pathlib import Path
 
-# Create database directory in current working directory
-db_dir = Path('database')
-db_dir.mkdir(exist_ok=True)
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_dir}/pewpew.db'
+# Use /data volume in Docker, fallback to local database directory
+db_dir = Path(os.getenv('DATABASE_DIR', 'database'))
+db_dir.mkdir(exist_ok=True, mode=0o777)
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:////{db_dir}/pewpew.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 # Initialize the GeoIP2 reader
@@ -316,32 +316,58 @@ logger = logging.getLogger(__name__)
 # Initialize the database
 with app.app_context():
     try:
-        # Create database directory if it doesn't exist
-        os.makedirs('database', exist_ok=True)
+        # Get database directory from environment or use default
+        db_dir = Path(os.getenv('DATABASE_DIR', 'database'))
+        
+        # Create database directory with proper permissions
+        db_dir.mkdir(exist_ok=True, mode=0o777)
         
         # Set full path for database file
-        db_path = os.path.join('database', 'pewpew.db')
-        db_file = Path(db_path)
+        db_path = db_dir / 'pewpew.db'
         
-        if not db_file.exists():
+        # Initialize database if it doesn't exist
+        if not db_path.exists():
             logger.info("Database not found. Creating new database...")
+            
+            # Create all tables
             db.create_all()
             
-            # Add default home IP to configuration
+            # Add default home IP
             dest = DestinationIP(ip=IP_HOME, is_default=True)
             db.session.add(dest)
+            
+            # Add default demo mode config
+            demo_config = Config(key='demo_mode', value='False')
+            db.session.add(demo_config)
+            
             db.session.commit()
             
             # Set permissions on database file
-            os.chmod(db_path, 0o666)  # Read/write for all
+            try:
+                db_path.chmod(0o666)  # Read/write for all
+            except Exception as perm_error:
+                logger.warning(f"Could not set permissions on database file: {perm_error}")
             
             logger.info(f"Database created successfully with default home IP: {IP_HOME}")
         else:
             logger.info("Existing database found")
             
+        # Verify database is writable
+        try:
+            test_config = Config(key='test', value='test')
+            db.session.add(test_config)
+            db.session.commit()
+            db.session.delete(test_config)
+            db.session.commit()
+            logger.info("Database write test successful")
+        except Exception as write_error:
+            logger.error(f"Database write test failed: {write_error}")
+            raise
+            
     except Exception as e:
         logger.error(f"Error initializing database: {str(e)}")
-        raise
+        # Try to continue running even if database initialization fails
+        # This allows the API to run in a degraded mode
 
 if __name__ == '__main__':
     # Initialize WebSocket server

@@ -8,9 +8,11 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - .:/app
+      - pewpew_data:/data
     environment:
       - FLASK_ENV=development
+      - DATABASE_DIR=/data
+    user: "1000:1000"
 
   frontend:
     build:
@@ -18,7 +20,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
-    volumes:
-      - .:/opt/pewpew
     depends_on:
       - api
+
+volumes:
+  pewpew_data:

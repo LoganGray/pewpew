@@ -17,9 +17,19 @@ COPY . .
 # Expose the Flask port
 EXPOSE 5000
 
-# Create database directory and set permissions
-RUN mkdir -p /opt/pewpew/database && \
-    chmod 777 /opt/pewpew/database
+# Create data volume for database with proper permissions
+RUN mkdir -p /data && \
+    chown -R 1000:1000 /data && \
+    chmod -R 777 /data
+
+# Set environment variable for database location
+ENV DATABASE_DIR=/data
+
+# Run as non-root user
+RUN useradd -m pewpew && \
+    chown -R pewpew:pewpew /app
+
+USER pewpew
 
 # Run the application
 CMD ["python", "mainapi.py"]
