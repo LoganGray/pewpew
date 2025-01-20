@@ -1,6 +1,6 @@
-/*****************************
- * GLOBAL CONFIGURATION
- *****************************/
+// /*****************************
+//  * GLOBAL CONFIGURATION
+//  *****************************/
 
 // Attack timing configuration (in milliseconds)
 const attack_min = 100;  // Minimum time between attacks
@@ -119,7 +119,7 @@ const urlParams = {
 };
 
 // Set default sound effect
-let snd_id = "starwars";
+let snd_id = "wargames";
 
 // Override sound effect based on URL parameters
 const soundMappings = {
@@ -223,7 +223,7 @@ class DataManager {
    */
   static async recordAttack(attackData) {
     try {
-      const response = await fetch('/api/attacks', {
+      const response = await fetch(`${API_URL}/api/attacks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,7 +245,7 @@ class DataManager {
    */
   static async getStats() {
     try {
-      const response = await fetch('/api/stats');
+      const response = await fetch(`${API_URL}/api/stats`);
       return await response.json();
     } catch (error) {
       console.error('Error getting stats:', error);
@@ -260,7 +260,7 @@ class DataManager {
    */
   static async getRecentAttacks(limit = 100) {
     try {
-      const response = await fetch(`/api/attacks?limit=${limit}`);
+      const response = await fetch(`${API_URL}/api/attacks?limit=${limit}`);
       return await response.json();
     } catch (error) {
       console.error('Error getting recent attacks:', error);
@@ -275,7 +275,7 @@ class DataManager {
    */
   static async getGeoLocation(ip) {
     try {
-      const response = await fetch(`/api/ip2geo?ip=${ip}`);
+      const response = await fetch(`${API_URL}/api/ip2geo?ip=${ip}`);
       return await response.json();
     } catch (error) {
       console.error('Error getting geo location:', error);
@@ -285,13 +285,97 @@ class DataManager {
 }
 
 /*****************************
+ * WEBSOCKET CONNECTION
+ *****************************/
+const socket = io(API_URL);
+console.log('API_URL:', API_URL);
+socket.on('new_attack', function(attack) {
+    // Convert attack data to visualization format
+    const attackData = {
+        origin: {
+            latitude: attack.geo.latitude,
+            longitude: attack.geo.longitude
+        },
+        destination: {
+            latitude: -33.494, // Google DNS location
+            longitude: 143.2104
+        },
+        attack_type: attack.attack_type,
+        source_ip: attack.source_ip,
+        dest_ip: attack.dest_ip
+    };
+    
+    // Visualize the attack
+    hits.push({
+        origin: attackData.origin,
+        destination: attackData.destination
+    });
+    map.arc(hits, {strokeWidth: 2, strokeColor: 'red'});
+
+    // Add boom effect
+    boom.push({
+        radius: 7,
+        latitude: attackData.destination.latitude,
+        longitude: attackData.destination.longitude,
+        fillOpacity: 0.5,
+        attk: attackData.attack_type
+    });
+    map.bubbles(boom, {
+        popupTemplate: function (geo, data) {
+            return '<div class="hoverinfo">' + data.attk + '</div>';
+        }
+    });
+
+    // Update attack log
+    $('#attackdiv').append(
+        attackData.origin.country + " (" + attackData.source_ip + ") " +
+        " <span style='color:red'>attacks</span> " +
+        attackData.destination.country + " (" + attackData.dest_ip + ") " +
+        " <span style='color:steelblue'>(" + attackData.attack_type + ")</span> " +
+        "<br/>"
+    );
+    $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
+});
+
+/*****************************
+ * ATTACK VISUALIZATION
+ *****************************/
+function visualizeAttack(attack) {
+    // Add hit to the arc queue
+    hits.push({
+        origin: attack.origin,
+        destination: attack.destination
+    });
+    map.arc(hits, {strokeWidth: 2, strokeColor: 'red'});
+
+    // Add boom to the bubbles queue
+    boom.push({
+        radius: 7, 
+        latitude: attack.destination.latitude,
+        longitude: attack.destination.longitude,
+        fillOpacity: 0.5, 
+        attk: attack.attack_type
+    });
+    map.bubbles(boom, {
+        popupTemplate: function (geo, data) {
+            return '<div class="hoverinfo">' + data.attk + '</div>';
+        }
+    });
+
+    // Update the scrolling attack div
+    $('#attackdiv').append(
+        attack.origin.country + " (" + attack.source_ip + ") " +
+        " <span style='color:red'>attacks</span> " +
+        attack.destination.country + " (" + attack.dest_ip + ") " +
+        " <span style='color:steelblue'>(" + attack.attack_type + ")</span> " +
+        "<br/>"
+    );
+    $('#attackdiv').animate({scrollTop: $('#attackdiv').prop("scrollHeight")}, 500);
+}
+
+/*****************************
  * MAIN APPLICATION
  *****************************/
-
-// pretty simple setup ->
-// * make base Datamap
-// * setup timers to add random events to a queue
-// * update the Datamap
 
 var map = new Datamap({
   scope: 'world',
@@ -342,10 +426,17 @@ var attacks = {
   interval: getRandomInt(attack_min, attack_max),
 
   init: function() {
-    setTimeout(
-      jQuery.proxy(this.getData, this),
-      this.interval
-    );
+    // Check if demo mode is enabled via API
+    fetch(`${API_URL}/api/demo/status`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.demo_mode) {
+          setTimeout(
+            jQuery.proxy(this.getData, this),
+            this.interval
+          );
+        }
+      });
   },
 
   getData: function() {
@@ -496,6 +587,26 @@ var attacks = {
       // Record attack using DataManager
       const sourceIP = randomIP();
       const destIP = randomIP();
+    
+      // Visualize the attack
+      hits.push({
+        origin: {latitude: +srclat, longitude: +srclong},
+        destination: {latitude: +dstlat, longitude: +dstlong}
+      });
+      map.arc(hits, {strokeWidth: 2, strokeColor: strokeColor});
+
+      // Add boom effect
+      boom.push({
+        radius: 7, latitude: +dstlat, longitude: +dstlong,
+        fillOpacity: 0.5, attk: which_attack
+      });
+      map.bubbles(boom, {
+        popupTemplate: function (geo, data) {
+          return '<div class="hoverinfo">' + data.attk + '</div>';
+        }
+      });
+
+      // Record in database
       DataManager.recordAttack({
         source_ip: sourceIP,
         source_country: srccountry,
