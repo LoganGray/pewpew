@@ -6,6 +6,9 @@
 const attack_min = 100;  // Minimum time between attacks
 const attack_max = 2000; // Maximum time between attacks
 
+// Initialize default attack type
+let attack_type = "any port scan in a storm";
+
 // List of possible attack types that will be randomly selected
 // These are displayed in the attack log and attack bubbles
 const attack_types = [
@@ -541,7 +544,7 @@ var attacks = {
     var srclong = slatlong[src].long;
     var dstlat = slatlong[dst].lat;
     var dstlong = slatlong[dst].long;
-    which_attack = attack_type[Math.floor((Math.random() * attack_type.length))];
+    which_attack = attack_types[Math.floor((Math.random() * attack_types.length))];
     var srccountry = slatlong[src]["country"];
     // "Hi, Mandiant!!"
     if (typeof china_mode !== 'undefined') {
