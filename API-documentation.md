@@ -114,6 +114,26 @@ Returns current demo mode status.
 curl http://localhost:5000/api/demo/status
 ```
 
+### 8. Get Current Destination
+**GET** `/setdestination`
+
+Returns current destination IP configuration.
+
+#### Example
+```bash
+curl http://localhost:5000/api/setdestination
+```
+
+### 9. Set New Destination
+**POST** `/setdestination/<ip>`
+
+Sets a new destination IP address.
+
+#### Example
+```bash
+curl -X POST http://localhost:5000/api/setdestination/1.1.1.1
+```
+
 ## WebSocket Events
 
 ### New Attack Event
