@@ -104,7 +104,7 @@ body {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <script>
   // Set API and WebSocket URLs
-  const API_URL = 'http://localhost:5000';
+  const API_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
   window.API_URL = API_URL; // Make it globally accessible
 </script>
 
